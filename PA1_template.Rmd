@@ -1,25 +1,179 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Coursera week 2 work"
+author: "yu yang liu"
+date: "2017/2/5"
+output: html_document
 ---
+```{r}
+knitr::opts_chunk$set(cache = T,echo = T)
+```
 
 
-## Loading and preprocessing the data
+##Loading and preprocessing the data
+* unzip file
+```{r} 
+if(!file.exists("activity.csv")){
+  unzip("repdata_data_activity.zip")
+}
+```
+* load packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(data.table)
+```
+* load data
+```{r}
+df<-read.csv("activity.csv")
+```
+* view into data
+```{r}
+dim(df)
+str(df)
+head(df)
+tail(df)
+```
+
+
+##What is mean total number of steps taken per day?
+
+```{r,fig.width=6}
+q2<-df%>%
+  group_by(date)%>%
+  summarize(total=sum(na.omit(steps)),mean=mean(na.omit(steps)),median=median(na.omit(steps)))
+
+head(q2)    #view into data
+
+ggplot(q2,aes(date,total))+
+  geom_histogram(stat = "identity")+
+  labs(title="Histogram of the total number of steps taken each day",y="total steps")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(q2,aes(date,mean))+
+  geom_histogram(stat="identity")+
+  labs(title="Histogram of the mean of steps taken each day",y="mean steps")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(q2,aes(date,median))+
+  geom_histogram(stat="identity")+
+  labs(title="Histogram of the median of steps taken each day",y="median steps")+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+##What is the average daily activity pattern?
+
+```{r q5}
+q5<-df%>%
+  group_by(interval)%>%
+  summarize(mean=mean(na.omit(steps)))
+q51<-q5$interval[q5$mean==max(q5$mean)]
+q52<-max(q5$mean)
+
+ggplot(q5,aes(interval,mean))+
+  geom_line(stat="identity")+
+  geom_vline(xintercept =q51,lty=6,color="red3",lwd=1.2,alpha=.5)+
+  annotate("segment",x=q51+200,xend =q51+25,y=q52,yend=q52,arrow=arrow(),size=.75)+
+  annotate("text",x=q51+620,y=q52,label=paste("steps max:",round(q52,2)),size=6)+
+  scale_x_continuous(breaks = c(0,500,q51,1000,1500,2000))+
+  labs(y="mean steps",title="Average daily activity pattern")
+```
+
+we can see when the time is at 8:30, it have the maximum steps taken.  
+About 206.17 steps taken peer days
+
+##Imputing missing values
+
+First we recap what the data look like
+```{r q6}
+head(df)
+tail(df)
+```
+
+
+* how many NA in data
+```{r}
+q61<-c(length(which(is.na(df[,1]))),round(length(which(is.na(df[,1])))/nrow(df),2))
+q62<-length(which(is.na(df[,2])))
+q63<-length(which(is.na(df[,3])))
+q65<-q61+q62+q63
+q66<-data.frame(steps=q61,date=q62,interval=q63,total=q65)
+rownames(q66)<-c("quantity", "percent (%)")
+q66
+```
+there have 2304 NA in "steps", about 0.13% of total data.  
+other variables have no missing data
+
+* deal with missing values
+```{r}
+q64<-df%>%
+  group_by(interval)%>%
+  summarize(max=mean(na.omit(steps)))
+head(q64)
+```
+
+I want to fill missing values with the mean for that 5-minute interval
+```{r}
+for(i in 1:nrow(df)){
+    if(is.na(df[i,1])){
+      a<-which(q64[,1]==df[i,3])
+    df[i,1]<-q64[a,2]
+  }
+}
+head(df)
+```
+so the new data would like above  
+  
+Histogram of the total number/mean/median of steps taken each day after missing values are imputed would look like this
+```{r q7}
+
+q7<-df%>%
+  group_by(date)%>%
+  summarize(total=sum(steps),mean=mean(steps),median=median(steps))
+
+ggplot(q7,aes(date,total))+
+  geom_histogram(stat = "identity")+
+  labs(title="Histogram of the total number of steps taken each day",y="total steps")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(q7,aes(date,mean))+
+  geom_histogram(stat="identity")+
+  labs(title="Histogram of the mean steps taken each day",y="mean steps")+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(q7,aes(date,median))+
+  geom_histogram(stat="identity")+
+  labs(title="Histogram of the median steps taken each day",y="median steps")+
+  theme(axis.text.x = element_text(angle = 90))
+
+```
 
 
 
-## What is mean total number of steps taken per day?
+##Are there differences in activity patterns between weekdays and weekends?
+* indicating whether the day data give is a weekday or weekend day
+```{r q8}
+q8<-df%>%
+  mutate(week=weekdays(as.POSIXct(df$date)))
 
+q8<-q8%>%
+  mutate(week2=ifelse(week%in%c("星期一","星期二","星期三","星期四","星期五"),"weekdays","weekends"))
 
+```
 
-## What is the average daily activity pattern?
+the levels of weekdays/weekends variable
+```{r}
+levels(as.factor(q8$week2))
+```
 
+* panel plot containing a time series plot of the 5-minute interval and the average number of steps taken
 
+```{r}
+q81<-q8%>%
+  group_by(week2,interval)%>%
+  summarize(mean=mean(steps))
+ggplot(q81,aes(interval,mean))+
+  geom_line(stat="identity")+
+  labs(title="time series plot for average steps by weekdays/weekends",y="mean of steps")+
+  facet_grid(week2~.)
+```
 
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
